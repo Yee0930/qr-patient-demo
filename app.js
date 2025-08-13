@@ -86,7 +86,26 @@ const patientCard = document.getElementById("patient-card");
 const emptyHint = document.getElementById("empty-hint");
 const fileInput = document.getElementById("file-input");
 
-// 依 rawText 更新畫面
+// ---- 內嵌瀏覽器偵測（LINE/FB/IG 等常拿不到相機）----
+function isInAppBrowser() {
+  const ua = navigator.userAgent || "";
+  return /(FBAN|FBAV|Instagram|Line|LINE|MicroMessenger|WX|TikTok|Bytedance)/i.test(ua);
+}
+
+// ---- 先彈系統權限：getUserMedia({video:true}) ----
+async function ensureCameraPermission() {
+  if (!navigator.mediaDevices?.getUserMedia) return false;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    // 立刻關掉避免占用
+    stream.getTracks().forEach(t => t.stop());
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// ---- 依 rawText 更新畫面 ----
 function refreshFromRawText() {
   const id = parseQR(rawText.value);
   parsedIdEl.textContent = id || "－";
@@ -102,7 +121,7 @@ function refreshFromRawText() {
 }
 rawText.addEventListener("input", refreshFromRawText);
 
-// 初始化鏡頭列表
+// ---- 初始化鏡頭列表（在授權後 enumerateDevices）----
 async function initCameras() {
   try {
     const cams = await Html5Qrcode.getCameras();
@@ -110,26 +129,43 @@ async function initCameras() {
     cams.forEach((c, i) => {
       const opt = document.createElement("option");
       opt.value = c.id;
-      opt.textContent = c.label || `Camera ${i+1}`;
+      opt.textContent = c.label || `Camera ${i + 1}`;
       cameraSelect.appendChild(opt);
     });
     if (cams[0]) currentCameraId = cams[0].id;
+    return cams.length > 0;
   } catch (e) {
     console.error(e);
+    return false;
   }
 }
-cameraSelect.addEventListener("change", e => currentCameraId = e.target.value);
+cameraSelect.addEventListener("change", e => (currentCameraId = e.target.value));
 
-// 開始掃描
+// ---- 按「開始掃描」→ 先彈系統權限，再列相機並啟動 ----
 btnStart.addEventListener("click", async () => {
+  if (isInAppBrowser()) {
+    return alert("偵測到在 App 內嵌瀏覽器開啟，常會拿不到相機權限。\n請用 Safari 或 Chrome 直接開啟此網址再試一次。");
+  }
+
+  // 1) 先請求權限（這一步會觸發 iOS/Android 的系統彈窗）
+  const granted = await ensureCameraPermission();
+  if (!granted) {
+    return alert("請允許相機權限才能開始掃描。\n若未出現彈窗，請到瀏覽器的網站設定手動允許相機。");
+  }
+
+  // 2) 授權後列出相機清單
+  const hasCam = await initCameras();
+  if (!hasCam || !currentCameraId) {
+    return alert("找不到相機裝置，請確認：\n1) 使用 Safari/Chrome 開啟（不要在 LINE/FB 內）\n2) 網址為 HTTPS 或 localhost\n3) 已允許相機權限\n4) 不是無痕模式");
+  }
+
+  // 3) 啟動掃描
   try {
-    if (!currentCameraId) await initCameras();
-    if (!currentCameraId) return alert("找不到相機裝置，請確認權限與瀏覽器環境。");
     html5Qr = new Html5Qrcode("reader");
     await html5Qr.start(
       { deviceId: { exact: currentCameraId } },
       { fps: 10, qrbox: { width: 250, height: 250 } },
-      (decodedText) => {
+      decodedText => {
         rawText.value = decodedText;
         refreshFromRawText();
       }
@@ -138,11 +174,11 @@ btnStart.addEventListener("click", async () => {
     btnStop.disabled = false;
   } catch (e) {
     console.error(e);
-    alert("啟動相機失敗，請確認裝置授權與 HTTPS。");
+    alert("啟動相機失敗，請確認已允許相機、使用 HTTPS，並改用 Safari/Chrome 直接開啟。");
   }
 });
 
-// 停止掃描
+// ---- 停止掃描 ----
 btnStop.addEventListener("click", async () => {
   try {
     if (html5Qr) {
@@ -156,13 +192,12 @@ btnStop.addEventListener("click", async () => {
   }
 });
 
-// 從圖片檔解析
+// ---- 從圖片檔解析 ----
 fileInput.addEventListener("change", async (e) => {
   const file = e.target.files?.[0];
   if (!file) return;
   try {
-    // html5-qrcode 直接解析檔案
-    const tmp = new Html5Qrcode(/* element id not required for scanFile */ "reader");
+    const tmp = new Html5Qrcode("reader");
     const res = await tmp.scanFile(file, false);
     await tmp.clear();
     rawText.value = res;
@@ -175,29 +210,5 @@ fileInput.addEventListener("change", async (e) => {
   }
 });
 
-// 產生 demo QR（用 qrcode 套件畫成 dataURL）
-function generateDemoQR() {
-  const json1 = JSON.stringify({ type: "patient", id: "P1001" });
-  const json2 = JSON.stringify({ type: "patient", id: "P2002" });
-  QRCode.toDataURL(json1).then(url => { document.getElementById("qr-P1001").src = url; });
-  QRCode.toDataURL(json2).then(url => { document.getElementById("qr-P2002").src = url; });
-}
-generateDemoQR();
-
-// Demo 按鈕行為
-document.querySelectorAll("[data-fill]").forEach(btn => {
-  btn.addEventListener("click", () => {
-    rawText.value = btn.getAttribute("data-fill");
-    refreshFromRawText();
-  });
-});
-document.querySelectorAll("[data-fill-json]").forEach(btn => {
-  btn.addEventListener("click", () => {
-    rawText.value = btn.getAttribute("data-fill-json");
-    refreshFromRawText();
-  });
-});
-
-// 首次載入
-initCameras();
+// ---- 首次載入（不自動取權限，等按下開始掃描）----
 refreshFromRawText();
