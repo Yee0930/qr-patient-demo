@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>QR 掃描 × 患者資訊｜快速模擬（純前端）</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <!-- html5-qrcode (掃描) -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.13/html5-qrcode.min.js"></script>
+  <!-- qrcode (產生 demo QR) -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>QR 掃描 × 患者資訊｜快速模擬（純前端）</h1>
+    <p class="sub">相機掃描或上傳圖片 → 解析出病患 ID → 顯示硬編碼（寫死）的範例資訊。支援純文字 ID、JSON、或含參數的 URL。</p>
+
+    <div class="grid">
+      <section class="card">
+        <div class="controls">
+          <select id="camera-select"></select>
+          <button id="btn-start">開始掃描</button>
+          <button id="btn-stop" class="danger" disabled>停止掃描</button>
+          <label class="file-label">從圖片解析 <input type="file" id="file-input" accept="image/*" /></label>
+        </div>
+        <div id="reader" class="reader"></div>
+        <div class="field">
+          <div class="label">QR 解析原始文字</div>
+          <textarea id="raw-text" placeholder="在此貼上 QR 文字或掃描後自動帶入"></textarea>
+          <div class="id-line">解析後 ID：<strong id="parsed-id">－</strong></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h3>快速測試（內建兩位範例病患）</h3>
+        <ol class="note">
+          <li>用另一支手機顯示下方 QR，讓本機掃描。</li>
+          <li>或直接按下「填入」按鈕。</li>
+        </ol>
+        <div class="demo-grid">
+          <div class="demo">
+            <img id="qr-P1001" alt="QR P1001" />
+            <div class="demo-buttons">
+              <button data-fill="P1001">填入純 ID</button>
+              <button data-fill-json='{"type":"patient","id":"P1001"}'>填入 JSON</button>
+            </div>
+          </div>
+          <div class="demo">
+            <img id="qr-P2002" alt="QR P2002" />
+            <div class="demo-buttons">
+              <button data-fill="P2002">填入純 ID</button>
+              <button data-fill-json='{"type":"patient","id":"P2002"}'>填入 JSON</button>
+            </div>
+          </div>
+        </div>
+        <div class="tiny">
+          * 攝影機取用需要 HTTPS 或 localhost。行動裝置請以安全連線開啟。<br/>
+          * 僅示範用途，請勿置入真實個資。正式版請加上權限告知、加密/權杖驗證、存取稽核等。
+        </div>
+      </section>
+    </div>
+
+    <section id="patient-card" class="card hidden"></section>
+    <div id="empty-hint" class="hint">尚未匹配到模擬病患（請掃描或輸入 P1001 / P2002）。</div>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
